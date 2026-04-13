@@ -2036,6 +2036,13 @@ public partial class WorkflowGenerator
             altHandler(genInfo);
         }
         string previewType = UserInput.Get(ComfyUIBackendExtension.VideoPreviewType, "animate");
+        // Retrieve SVI LoRA parameters
+        string sviHighLora = UserInput.Get(T2IParamTypes.VideoExtendSviHighLora, "", sectionId: genInfo.ContextID, includeBase: false)
+            ?? UserInput.Get(T2IParamTypes.VideoExtendSviHighLora, "", sectionId: T2IParamInput.SectionID_Video, includeBase: false)
+            ?? "";
+        string sviLowLora = UserInput.Get(T2IParamTypes.VideoExtendSviLowLora, "", sectionId: genInfo.ContextID, includeBase: false)
+            ?? UserInput.Get(T2IParamTypes.VideoExtendSviLowLora, "", sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false)
+            ?? "";
         int endStep = 10000;
         bool returnLeftoverNoise = false;
         if (genInfo.VideoSwapModel is not null)
@@ -2043,10 +2050,22 @@ public partial class WorkflowGenerator
             endStep = (int)Math.Round(genInfo.Steps * (1 - genInfo.VideoSwapPercent));
             returnLeftoverNoise = true;
         }
-        string explicitSampler = UserInput.Get(ComfyUIBackendExtension.SamplerParam, null, sectionId: genInfo.ContextID, includeBase: false);
-        string explicitScheduler = UserInput.Get(ComfyUIBackendExtension.SchedulerParam, null, sectionId: genInfo.ContextID, includeBase: false);
+        string explicitSampler = UserInput.Get(ComfyUIBackendExtension.SamplerParam, (string)null, sectionId: genInfo.ContextID, includeBase: false);
+        string explicitScheduler = UserInput.Get(ComfyUIBackendExtension.SchedulerParam, (string)null, sectionId: genInfo.ContextID, includeBase: false);
         CurrentMedia = CurrentMedia.AsSamplingLatent(genInfo.Vae, CurrentAudioVae);
-        string samplered = CreateKSampler(genInfo.Model.Path, genInfo.PosCond, genInfo.NegCond, CurrentMedia.Path, genInfo.VideoCFG.Value, genInfo.Steps, genInfo.StartStep, endStep, genInfo.Seed, returnLeftoverNoise, true, sigmin: 0.002, sigmax: 1000, previews: previewType, defsampler: genInfo.DefaultSampler, defscheduler: genInfo.DefaultScheduler, hadSpecialCond: genInfo.HadSpecialCond, explicitSampler: explicitSampler, explicitScheduler: explicitScheduler, sectionId: genInfo.ContextID);
+        // Apply SVI High LoRA if specified
+        string modelForHighStage = genInfo.Model.Path[0].ToString();
+        if (!string.IsNullOrWhiteSpace(sviHighLora))
+        {
+            modelForHighStage = CreateNode("LoraLoaderModelOnly", new JObject()
+            {
+                ["model"] = genInfo.Model.Path,
+                ["lora_name"] = sviHighLora,
+                ["strength_model"] = 1.0,
+                ["strength_clip"] = 0.0
+            }, "svi_high_lora");
+        }
+        string samplered = CreateKSampler(NodePath(modelForHighStage, 0), genInfo.PosCond, genInfo.NegCond, CurrentMedia.Path, genInfo.VideoCFG.Value, genInfo.Steps, genInfo.StartStep, endStep, genInfo.Seed, returnLeftoverNoise, true, sigmin: 0.002, sigmax: 1000, previews: previewType, defsampler: genInfo.DefaultSampler, defscheduler: genInfo.DefaultScheduler, hadSpecialCond: genInfo.HadSpecialCond, explicitSampler: explicitSampler, explicitScheduler: explicitScheduler, sectionId: genInfo.ContextID);
         CurrentMedia = CurrentMedia.WithPath([samplered, 0]);
         CurrentMedia.Frames = genInfo.Frames ?? CurrentMedia.Frames;
         CurrentMedia.FPS = genInfo.VideoFPS ?? CurrentMedia.FPS;
@@ -2063,13 +2082,25 @@ public partial class WorkflowGenerator
             CurrentMedia = srcImage;
             genInfo.PrepFullCond(this, srcImage);
             genInfo.FixMediaLen();
-            explicitSampler = UserInput.Get(ComfyUIBackendExtension.SamplerParam, null, sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false) ?? explicitSampler;
-            explicitScheduler = UserInput.Get(ComfyUIBackendExtension.SchedulerParam, null, sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false) ?? explicitScheduler;
+            explicitSampler = UserInput.Get(ComfyUIBackendExtension.SamplerParam, (string)null, sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false) ?? explicitSampler;
+            explicitScheduler = UserInput.Get(ComfyUIBackendExtension.SchedulerParam, (string)null, sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false) ?? explicitScheduler;
             cfg = UserInput.GetNullable(T2IParamTypes.CFGScale, T2IParamInput.SectionID_VideoSwap, false) ?? cfg;
             steps = UserInput.GetNullable(T2IParamTypes.Steps, T2IParamInput.SectionID_VideoSwap, false) ?? steps;
             endStep = (int)Math.Round(steps * (1 - genInfo.VideoSwapPercent));
+            // Apply SVI Low LoRA if specified
+            string modelForLowStage = swapVideoModel.Path[0].ToString();
+            if (!string.IsNullOrWhiteSpace(sviLowLora))
+            {
+                modelForLowStage = CreateNode("LoraLoaderModelOnly", new JObject()
+                {
+                    ["model"] = swapVideoModel.Path,
+                    ["lora_name"] = sviLowLora,
+                    ["strength_model"] = 1.0,
+                    ["strength_clip"] = 0.0
+                }, "svi_low_lora");
+            }
             // TODO: Should class-changes be allowed (must re-emit all the model-specific cond logic, maybe a vae reencoder - this is basically a refiner run)
-            samplered = CreateKSampler(swapVideoModel.Path, genInfo.PosCond, genInfo.NegCond, latent.Path, cfg, steps, endStep, 10000, genInfo.Seed + 1, false, false, sigmin: 0.002, sigmax: 1000, previews: previewType, defsampler: genInfo.DefaultSampler, defscheduler: genInfo.DefaultScheduler, hadSpecialCond: genInfo.HadSpecialCond, explicitSampler: explicitSampler, explicitScheduler: explicitScheduler, sectionId: T2IParamInput.SectionID_VideoSwap);
+            samplered = CreateKSampler(NodePath(modelForLowStage, 0), genInfo.PosCond, genInfo.NegCond, latent.Path, cfg, steps, endStep, 10000, genInfo.Seed + 1, false, false, sigmin: 0.002, sigmax: 1000, previews: previewType, defsampler: genInfo.DefaultSampler, defscheduler: genInfo.DefaultScheduler, hadSpecialCond: genInfo.HadSpecialCond, explicitSampler: explicitSampler, explicitScheduler: explicitScheduler, sectionId: T2IParamInput.SectionID_VideoSwap);
             CurrentMedia = CurrentMedia.WithPath([samplered, 0]);
             IsImageToVideoSwap = false;
         }

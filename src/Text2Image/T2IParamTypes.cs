@@ -323,8 +323,9 @@ public class T2IParamTypes
         return update;
     }
 
-    public static T2IRegisteredParam<string> Prompt, NegativePrompt, AspectRatio, BackendType, RefinerMethod, FreeUApplyTo, FreeUVersion, PersonalNote, VideoFormat, VideoResolution, UnsamplerPrompt, ImageFormat, MaskBehavior, ColorCorrectionBehavior, RawResolution, SeamlessTileable, SD3TextEncs, BitDepth, Webhooks, WildcardSeedBehavior, SegmentSortOrder, SegmentTargetResolution, SegmentApplyAfter, TorchCompile, VideoExtendFormat, ExactBackendID, OverridePredictionType, OverrideOutpathFormat, Text2AudioTimeSignature, Text2AudioLanguage, Text2AudioKeyScale, Text2AudioStyle;
-    public static T2IRegisteredParam<int> Images, Steps, Width, Height, SideLength, BatchSize, VAETileSize, VAETileOverlap, VAETemporalTileSize, VAETemporalTileOverlap, ClipStopAtLayer, VideoFrames, VideoMotionBucket, VideoFPS, VideoSteps, RefinerSteps, CascadeLatentCompression, MaskShrinkGrow, MaskBlur, MaskGrow, SegmentMaskBlur, SegmentMaskGrow, SegmentMaskOversize, SegmentSteps, Text2VideoFrames, TrimVideoStartFrames, TrimVideoEndFrames, VideoExtendFrameOverlap;
+    public static T2IRegisteredParam<string> Prompt, NegativePrompt, AspectRatio, BackendType, RefinerMethod, FreeUApplyTo, FreeUVersion, PersonalNote, VideoFormat, VideoResolution, UnsamplerPrompt, ImageFormat, MaskBehavior, ColorCorrectionBehavior, RawResolution, SeamlessTileable, SD3TextEncs, BitDepth, Webhooks, WildcardSeedBehavior, SegmentSortOrder, SegmentTargetResolution, SegmentApplyAfter, TorchCompile, VideoExtendFormat, VideoExtendSviHighLora, VideoExtendSviLowLora, ExactBackendID, OverridePredictionType, OverrideOutpathFormat, Text2AudioTimeSignature, Text2AudioLanguage, Text2AudioKeyScale, Text2AudioStyle;
+    public static T2IRegisteredParam<int> Images, Steps, Width, Height, SideLength, BatchSize, VAETileSize, VAETileOverlap, VAETemporalTileSize, VAETemporalTileOverlap, ClipStopAtLayer, VideoFrames, VideoMotionBucket, VideoFPS, VideoSteps, RefinerSteps, CascadeLatentCompression, MaskShrinkGrow, MaskBlur, MaskGrow, SegmentMaskBlur, SegmentMaskGrow, SegmentMaskOversize, SegmentSteps, Text2VideoFrames, TrimVideoStartFrames, TrimVideoEndFrames, VideoExtendFrameOverlap, VideoExtendTotalDuration;
+    public static T2IRegisteredParam<bool> VideoExtendAutoChain;
     public static T2IRegisteredParam<long> Seed, VariationSeed, WildcardSeed, Text2AudioBPM;
     public static T2IRegisteredParam<double> CFGScale, VariationSeedStrength, InitImageCreativity, InitImageResetToNorm, InitImageNoise, RefinerControl, RefinerUpscale, RefinerCFGScale, ReVisionStrength, AltResolutionHeightMult,
         FreeUBlock1, FreeUBlock2, FreeUSkip1, FreeUSkip2, GlobalRegionFactor, EndStepsEarly, SamplerSigmaMin, SamplerSigmaMax, SamplerRho, VideoAugmentationLevel, VideoCFG, VideoMinCFG, Video2VideoCreativity, VideoSwapPercent, VideoExtendSwapPercent, IP2PCFG2, RegionalObjectCleanupFactor, SigmaShift, SegmentThresholdMax, SegmentCFGScale, FluxGuidanceScale, Text2AudioDuration;
@@ -648,8 +649,8 @@ public class T2IParamTypes
             ));
         // ================================================ Video Extend ================================================
         GroupVideoExtend = new("Video Extend", Open: false, OrderPriority: 7, IsAdvanced: true, Toggles: true);
-        VideoExtendFrameOverlap = Register<int>(new("Video Extend Frame Overlap", "How many frames at the end of the video should be repeated into the start of next video.\nThis is a balancing act, more frames gets better motion clarity, but also wastes more performance on redundant calculations.\nMake sure this is a valid frame count for your video model, eg a multiple of 4 plus 1 for Wan (5, 9, 13, 17, ...).\nShould be no more than 1/3rd the frame count of your shortest extend window.\nFor models not trained on extend behavior, '1' may be optimal.",
-            "9", Min: 1, Max: 128, OrderPriority: 5.5, Group: GroupVideoExtend, Examples: ["1", "5", "9"], DoNotPreview: true
+        VideoExtendFrameOverlap = Register<int>(new("Video Extend Frame Overlap", "How many frames at the end of the video should be repeated into the start of next video.\nThis is a balancing act, more frames gets better motion clarity, but also wastes more performance on redundant calculations.\nCRITICAL for Wan 2.2 with SVI LoRAs:\n- 9 frames: Minimum, may show visible transitions\n- 16 frames: Better continuity, moderate VRAM usage\n- 25-30 frames: RECOMMENDED for SVI LoRAs, smoothest transitions\nMake sure this is a valid frame count for your video model, eg a multiple of 4 plus 1 for Wan (5, 9, 13, 17, 21, 25, 29, ...).\nShould be no more than 1/3rd the frame count of your shortest extend window.\nFor models not trained on extend behavior, '1' may be optimal.",
+            "25", Min: 1, Max: 128, OrderPriority: 5.5, Group: GroupVideoExtend, Examples: ["9", "16", "25", "28", "30"], DoNotPreview: true
             ));
         VideoExtendModel = Register<T2IModel>(new("Video Extend Model", "The model to use for video extending.\nSelect an image-to-video model, note that text-to-video models do not work.",
             "", GetValues: s => CleanModelList(Program.MainSDModels.ListModelsFor(s).Where(m => m.ModelClass is not null && isVideoClass(m.ModelClass.ID)).Select(m => m.Name)),
@@ -665,6 +666,44 @@ public class T2IParamTypes
         VideoExtendFormat = Register<string>(new("Video Extend Format", "What format to save extended videos in.\nWebp video is simple and efficient, but has compatibility issues. Gif is simple and compatible, while gif-hd is higher quality via ffmpeg.\nh264-mp4 is a standard video file that works anywhere, but doesn't get treated like an image file.\nh265-mp4 is a smaller file size but may not work for all devices.\nprores is a specialty format.",
             "h264-mp4", GetValues: _ => videoFormats, OrderPriority: 20, Group: GroupVideoExtend, Permission: Permissions.ParamVideo, FeatureFlag: "video", DoNotPreview: true
             ));
+        // SVI High LoRA for Video Extend
+        VideoExtendSviHighLora = Register<string>(new("Video Extend SVI High LoRA",
+            "SVI High-Noise LoRA for video extension with Wan 2.2. Applied to the base Video Extend Model. Essential for 60+ second videos with character consistency. Place SVI LoRA files in Models/LoRA/ folder.",
+            "",  // Default: empty (disabled - backward compatible)
+            IgnoreIf: "",
+            FeatureFlag: "video_extend",
+            Group: GroupVideoExtend,
+            OrderPriority: 3
+        ));
+        // SVI Low LoRA for Video Extend
+        VideoExtendSviLowLora = Register<string>(new("Video Extend SVI Low LoRA",
+            "SVI Low-Noise LoRA for video extension with Wan 2.2. Applied to the Video Extend Swap Model (low-noise stage). Must be used with SVI High LoRA for optimal continuity.",
+            "",  // Default: empty (disabled - backward compatible)
+            IgnoreIf: "",
+            FeatureFlag: "video_extend",
+            Group: GroupVideoExtend,
+            OrderPriority: 4
+        ));
+        // Auto-chaining for long-form
+        VideoExtendAutoChain = Register<bool>(new("Video Extend Auto-Chain",
+            "Enable automatic multi-segment chaining. When enabled, Video Extend will automatically chain 4-12 segments based on total duration, instead of requiring manual &lt;extend:N&gt; blocks.",
+            "false",  // Default: disabled (backward compatible)
+            IgnoreIf: "false",
+            FeatureFlag: "video_extend",
+            Group: GroupVideoExtend,
+            OrderPriority: 5
+        ));
+        VideoExtendTotalDuration = Register<int>(new("Video Extend Total Duration (seconds)",
+            "Target total video duration in seconds when using Auto-Chain. Determines number of segments (each ~5 seconds). Recommended: 20-60 seconds.",
+            "40",  // Default: 40 seconds
+            Min: 20,
+            Max: 120,
+            Step: 5,
+            FeatureFlag: "video_extend",
+            Group: GroupVideoExtend,
+            OrderPriority: 6,
+            DependNonDefault: VideoExtendAutoChain.Type.ID
+        ));
         // ================================================ Advanced Model Addons ================================================
         GroupAdvancedModelAddons = new("Advanced Model Addons", Open: false, OrderPriority: 8, IsAdvanced: true);
         Model = Register<T2IModel>(new("Model", "What main checkpoint model should be used.",
