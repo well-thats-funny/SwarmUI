@@ -169,10 +169,34 @@ public static class Utilities
 
     static Utilities()
     {
-        if (File.Exists("./.git/refs/heads/master"))
+        try
         {
-            GitCommit = File.ReadAllText("./.git/refs/heads/master").Trim()[0..8];
-            VaryID += ".GIT-" + GitCommit;
+            // Try to get the current commit SHA from HEAD (works for any branch)
+            if (File.Exists("./.git/HEAD"))
+            {
+                string headContent = File.ReadAllText("./.git/HEAD").Trim();
+                if (headContent.StartsWith("ref: "))
+                {
+                    // It's a branch reference like "ref: refs/heads/branchname"
+                    string refPath = headContent.Substring(5);
+                    string refFile = $".git/{refPath}";
+                    if (File.Exists(refFile))
+                    {
+                        GitCommit = File.ReadAllText(refFile).Trim()[0..8];
+                        VaryID += ".GIT-" + GitCommit;
+                    }
+                }
+                else
+                {
+                    // Detached HEAD - the content is the SHA directly
+                    GitCommit = headContent[0..8];
+                    VaryID += ".GIT-" + GitCommit;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // If git reading fails, GitCommit stays empty
         }
         for (int i = 0; i <= 9; i++)
         {
