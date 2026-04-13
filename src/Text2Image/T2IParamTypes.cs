@@ -668,7 +668,14 @@ public class T2IParamTypes
             ));
         // SVI High LoRA for Video Extend
         VideoExtendSviHighLora = Register<string>(new("Video Extend SVI High LoRA",
-            "SVI High-Noise LoRA for video extension with Wan 2.2. Applied to the base Video Extend Model. Essential for 60+ second videos with character consistency. Place SVI LoRA files in Models/LoRA/ folder.",
+            "SVI High-Noise LoRA for video extension with Wan 2.2.\n\n" +
+            "USAGE:\n" +
+            "- Required for videos 60+ seconds to maintain character consistency\n" +
+            "- Use with Wan 2.2 HIGH model (Image-to-Video base stage)\n" +
+            "- Common names: 'SVI_CharacterX_High.safetensors', 'SVI_Wan_High_v1.safetensors'\n" +
+            "- Pair with matching SVI Low LoRA for best continuity\n" +
+            "- Place LoRA files in: Models/LoRA/ folder (format: .safetensors)\n" +
+            "- Example workflow: For a 90-second video with consistent characters, enable this with a matching Low LoRA",
             "",  // Default: empty (disabled - backward compatible)
             IgnoreIf: "",
             FeatureFlag: "video_extend",
@@ -677,7 +684,14 @@ public class T2IParamTypes
         ));
         // SVI Low LoRA for Video Extend
         VideoExtendSviLowLora = Register<string>(new("Video Extend SVI Low LoRA",
-            "SVI Low-Noise LoRA for video extension with Wan 2.2. Applied to the Video Extend Swap Model (low-noise stage). Must be used with SVI High LoRA for optimal continuity.",
+            "SVI Low-Noise LoRA for video extension with Wan 2.2.\n\n" +
+            "USAGE:\n" +
+            "- Applied to the Video Extend Swap Model (low-noise stage in two-stage generation)\n" +
+            "- MUST be paired with SVI High LoRA (enabling one without the other may cause issues)\n" +
+            "- Use with Wan 2.2 LOW model (Swap model stage)\n" +
+            "- Must match the High LoRA variant (e.g., if using SVI_CharacterX_High, use SVI_CharacterX_Low)\n" +
+            "- Place LoRA files in: Models/LoRA/ folder (format: .safetensors)\n" +
+            "- Example pairing: 'SVI_CharacterX_High.safetensors' + 'SVI_CharacterX_Low.safetensors'",
             "",  // Default: empty (disabled - backward compatible)
             IgnoreIf: "",
             FeatureFlag: "video_extend",
@@ -686,7 +700,16 @@ public class T2IParamTypes
         ));
         // Auto-chaining for long-form
         VideoExtendAutoChain = Register<bool>(new("Video Extend Auto-Chain",
-            "Enable automatic multi-segment chaining. When enabled, Video Extend will automatically chain 4-12 segments based on total duration, instead of requiring manual &lt;extend:N&gt; blocks.",
+            "Enable automatic multi-segment chaining for long-form videos.\n\n" +
+            "USAGE:\n" +
+            "- Automatically chains segments instead of requiring manual &lt;extend:N&gt; blocks\n" +
+            "- Each segment is approximately 5 seconds (based on your FPS setting)\n" +
+            "- Combine with 'Total Duration' to set target length\n" +
+            "- EXAMPLE: For a 40-second video at 24fps: enable Auto-Chain, set Total Duration to 40\n" +
+            "- EXAMPLE: 60 seconds = ~12 segments (5 sec each)\n" +
+            "- EXAMPLE: 30 seconds = ~6 segments (5 sec each)\n" +
+            "- Disable if using manual &lt;extend:N&gt; syntax in your prompts\n" +
+            "- NOTE: Frame Overlap setting still applies between segments",
             "false",  // Default: disabled (backward compatible)
             IgnoreIf: "false",
             FeatureFlag: "video_extend",
@@ -694,7 +717,17 @@ public class T2IParamTypes
             OrderPriority: 5
         ));
         VideoExtendTotalDuration = Register<int>(new("Video Extend Total Duration (seconds)",
-            "Target total video duration in seconds when using Auto-Chain. Determines number of segments (each ~5 seconds). Recommended: 20-60 seconds.",
+            "Target total video duration in seconds when Auto-Chain is enabled.\n\n" +
+            "USAGE:\n" +
+            "- Determines number of segments (each segment is ~5 seconds)\n" +
+            "- Calculated segments = Total Duration / 5 seconds\n" +
+            "- EXAMPLE: 20 seconds = 4 segments\n" +
+            "- EXAMPLE: 40 seconds = 8 segments\n" +
+            "- EXAMPLE: 60 seconds = 12 segments\n" +
+            "- EXAMPLE: 120 seconds = 24 segments\n" +
+            "- RECOMMENDED: 20-60 seconds for most use cases\n" +
+            "- For very long videos (60+ sec), use with SVI LoRAs for character consistency\n" +
+            "- Requires Auto-Chain to be enabled (parameter hidden when disabled)",
             "40",  // Default: 40 seconds
             Min: 20,
             Max: 120,

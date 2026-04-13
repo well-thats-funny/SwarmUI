@@ -2043,6 +2043,73 @@ public partial class WorkflowGenerator
         string sviLowLora = UserInput.Get(T2IParamTypes.VideoExtendSviLowLora, "", sectionId: genInfo.ContextID, includeBase: false)
             ?? UserInput.Get(T2IParamTypes.VideoExtendSviLowLora, "", sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false)
             ?? "";
+
+        // SVI LoRA Validation
+        T2IModelHandler loraHandler = Program.T2IModelSets["LoRA"];
+
+        // Validate SVI High LoRA file exists
+        if (!string.IsNullOrWhiteSpace(sviHighLora))
+        {
+            if (!loraHandler.Models.TryGetValue(sviHighLora + ".safetensors", out T2IModel highLoraModel))
+            {
+                if (!loraHandler.Models.TryGetValue(sviHighLora, out highLoraModel))
+                {
+                    throw new SwarmUserErrorException($"SVI High LoRA '{sviHighLora}' not found in Models/LoRA folder. Please ensure the LoRA file exists and is correctly named with .safetensors extension.");
+                }
+            }
+        }
+
+        // Validate SVI Low LoRA file exists
+        if (!string.IsNullOrWhiteSpace(sviLowLora))
+        {
+            if (!loraHandler.Models.TryGetValue(sviLowLora + ".safetensors", out T2IModel lowLoraModel))
+            {
+                if (!loraHandler.Models.TryGetValue(sviLowLora, out lowLoraModel))
+                {
+                    throw new SwarmUserErrorException($"SVI Low LoRA '{sviLowLora}' not found in Models/LoRA folder. Please ensure the LoRA file exists and is correctly named with .safetensors extension.");
+                }
+            }
+        }
+
+        // Validate SVI LoRA pairing - both should be specified together
+        if (!string.IsNullOrWhiteSpace(sviHighLora) && string.IsNullOrWhiteSpace(sviLowLora))
+        {
+            Logs.Info($"SVI High LoRA is specified but no SVI Low LoRA is set. For best continuity, consider using both High and Low LoRAs together.");
+        }
+        if (string.IsNullOrWhiteSpace(sviHighLora) && !string.IsNullOrWhiteSpace(sviLowLora))
+        {
+            Logs.Info($"SVI Low LoRA is specified but no SVI High LoRA is set. SVI Low LoRA requires the High LoRA to be enabled.");
+        }
+
+        // Check for incompatible model settings
+        string extendModelName = genInfo.VideoModel?.Name ?? "";
+        string extendSwapModelName = genInfo.VideoSwapModel?.Name ?? "";
+        bool usingWan2High = extendModelName.Contains("Wan", StringComparison.OrdinalIgnoreCase) && extendModelName.Contains("2.2", StringComparison.OrdinalIgnoreCase) && extendModelName.Contains("HIGH", StringComparison.OrdinalIgnoreCase);
+        bool usingWan2Low = extendSwapModelName.Contains("Wan", StringComparison.OrdinalIgnoreCase) && extendSwapModelName.Contains("2.2", StringComparison.OrdinalIgnoreCase) && extendSwapModelName.Contains("LOW", StringComparison.OrdinalIgnoreCase);
+
+        if ((!string.IsNullOrWhiteSpace(sviHighLora) || !string.IsNullOrWhiteSpace(sviLowLora)) && !usingWan2High)
+        {
+            Logs.Info($"SVI LoRAs are designed for Wan 2.2 HIGH/LOW model pairs. Using SVI LoRAs with other models may produce suboptimal results.");
+        }
+
+        // Check frame overlap when SVI LoRAs are enabled
+        int frameOverlap = UserInput.Get(T2IParamTypes.VideoExtendFrameOverlap, 25, sectionId: genInfo.ContextID, includeBase: false);
+        if ((!string.IsNullOrWhiteSpace(sviHighLora) || !string.IsNullOrWhiteSpace(sviLowLora)) && frameOverlap < 25)
+        {
+            Logs.Info($"SVI LoRAs are enabled but Frame Overlap is set to {frameOverlap} (below recommended 25). Lower frame overlap may result in visible transitions. Consider increasing to 25+ for smoother continuity.");
+        }
+
+        // Check for Auto-Chain with very short duration (may be ineffective)
+        bool autoChainEnabled = UserInput.Get(T2IParamTypes.VideoExtendAutoChain, false, sectionId: genInfo.ContextID, includeBase: false);
+        if (autoChainEnabled)
+        {
+            int totalDuration = UserInput.Get(T2IParamTypes.VideoExtendTotalDuration, 40, sectionId: genInfo.ContextID, includeBase: false);
+            if (totalDuration < 20)
+            {
+                Logs.Info($"Auto-Chain is enabled with a very short Total Duration ({totalDuration} seconds). This may result in only 1-3 segments, reducing the benefit of auto-chaining. Consider using 20+ seconds for better results.");
+            }
+        }
+
         int endStep = 10000;
         bool returnLeftoverNoise = false;
         if (genInfo.VideoSwapModel is not null)
