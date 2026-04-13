@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Core;
@@ -2000,6 +2001,42 @@ public class WorkflowGeneratorSteps
                 return combinedAudio.WithPath([concatNode, 0], WGNodeData.DT_AUDIO, combinedAudio.Compat ?? nextAudio.Compat);
             }
             string fullRawPrompt = g.UserInput.Get(T2IParamTypes.Prompt, "");
+
+            // Auto-Chaining: Automatically generate multiple video segments based on total duration.
+            // When enabled and no manual <extend:N> blocks exist, this calculates the number of
+            // segments needed and generates them automatically for long-form video generation.
+            //
+            // Calculation logic:
+            // - Total frames needed = totalDuration (seconds) × videoFPS
+            // - Frames per segment = segmentDuration (5 seconds) × videoFPS
+            // - Number of segments = totalDuration / segmentDuration
+            //
+            // Example: 60 seconds total, 24 fps, 5-second segments
+            //   → 1440 total frames, 120 frames/segment, 12 segments
+            if (g.UserInput.Get(T2IParamTypes.VideoExtendAutoChain, false))
+            {
+                bool hasManualExtend = fullRawPrompt.Contains("<extend:");
+                if (!hasManualExtend)
+                {
+                    // Calculate auto-chaining parameters
+                    int totalDuration = g.UserInput.Get(T2IParamTypes.VideoExtendTotalDuration, 40);
+                    int segmentDuration = 5; // Standard segment duration: 5 seconds per segment
+                    int numSegments = Math.Max(1, totalDuration / segmentDuration);
+
+                    // Get video FPS for frame calculation (default to 24 if not specified)
+                    int? videoFps = g.UserInput.TryGet(T2IParamTypes.VideoFPS, out int fpsRaw) ? fpsRaw : 24;
+                    int framesPerSegment = segmentDuration * videoFps.Value;
+
+                    // Build synthetic extend blocks - each block generates one segment
+                    StringBuilder syntheticPromptBuilder = new StringBuilder(fullRawPrompt);
+                    for (int i = 0; i < numSegments; i++)
+                    {
+                        syntheticPromptBuilder.Append($"<extend:{framesPerSegment}>");
+                    }
+                    fullRawPrompt = syntheticPromptBuilder.ToString();
+                }
+            }
+
             if (fullRawPrompt.Contains("<extend:"))
             {
                 g.CurrentMedia = g.CurrentMedia.AsRawImage(g.CurrentVae);
@@ -2007,7 +2044,7 @@ public class WorkflowGeneratorSteps
                 long seed = g.UserInput.Get(T2IParamTypes.Seed) + 600;
                 int? videoFps = g.UserInput.TryGet(T2IParamTypes.VideoFPS, out int fpsRaw) ? fpsRaw : null;
                 string format = g.UserInput.Get(T2IParamTypes.VideoExtendFormat, "mp4").ToLowerFast();
-                int frameExtendOverlap = g.UserInput.Get(T2IParamTypes.VideoExtendFrameOverlap, 9);
+                int frameExtendOverlap = g.UserInput.Get(T2IParamTypes.VideoExtendFrameOverlap, 25);
                 bool saveIntermediate = g.UserInput.Get(T2IParamTypes.OutputIntermediateImages, false);
                 T2IModel extendModel = g.UserInput.Get(T2IParamTypes.VideoExtendModel, null) ?? throw new SwarmUserErrorException("You have an '<extend:' block in your prompt, but you don't have a 'Video Extend Model' selected.");
                 PromptRegion regionalizer = new(fullRawPrompt);
