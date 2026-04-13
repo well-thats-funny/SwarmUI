@@ -246,18 +246,6 @@ public class Program
                     ago = $"{relative.Minutes} minute{(relative.Minutes == 1 ? "" : "s")} ago";
                 }
                 Logs.Init($"Current git commit is [{parts[0]}: {parts[2]}], marked as date {CurrentGitDate} ({ago})");
-                // DEBUG: Verify FeaturesSupported content from the running DLL (not filesystem)
-                try
-                {
-                    var features = SwarmUI.Builtin_ComfyUIBackend.ComfyUIBackendExtension.FeaturesSupported;
-                    Logs.Init($"=== DEBUG: FeaturesSupported count: {features.Count} ===");
-                    Logs.Init($"=== DEBUG: FeaturesSupported: [{string.Join(", ", features)}] ===");
-                    Logs.Init($"=== DEBUG: video_extend present: {features.Contains("video_extend")} ===");
-                }
-                catch (Exception ex)
-                {
-                    Logs.Error($"Failed to log FeaturesSupported: {ex.ReadableString()}");
-                }
             }
             catch (Exception ex)
             {

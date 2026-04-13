@@ -678,7 +678,7 @@ public class T2IParamTypes
             "- Example workflow: For a 90-second video with consistent characters, enable this with a matching Low LoRA",
             "",  // Default: empty (disabled - backward compatible)
             IgnoreIf: "",
-            FeatureFlag: "video_extend",
+            FeatureFlag: "video",
             Group: GroupVideoExtend,
             OrderPriority: 3
         ));
@@ -694,7 +694,7 @@ public class T2IParamTypes
             "- Example pairing: 'SVI_CharacterX_High.safetensors' + 'SVI_CharacterX_Low.safetensors'",
             "",  // Default: empty (disabled - backward compatible)
             IgnoreIf: "",
-            FeatureFlag: "video_extend",
+            FeatureFlag: "video",
             Group: GroupVideoExtend,
             OrderPriority: 4
         ));
@@ -712,7 +712,7 @@ public class T2IParamTypes
             "- NOTE: Frame Overlap setting still applies between segments",
             "false",  // Default: disabled (backward compatible)
             IgnoreIf: "false",
-            FeatureFlag: "video_extend",
+            FeatureFlag: "video",
             Group: GroupVideoExtend,
             OrderPriority: 5
         ));
@@ -732,7 +732,7 @@ public class T2IParamTypes
             Min: 20,
             Max: 120,
             Step: 5,
-            FeatureFlag: "video_extend",
+            FeatureFlag: "video",
             Group: GroupVideoExtend,
             OrderPriority: 6,
             DependNonDefault: VideoExtendAutoChain.Type.ID
